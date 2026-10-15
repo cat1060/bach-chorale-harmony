@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Bach Chorale Harmony</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Source+Sans+3:wght@400;600&family=JetBrains+Mono&display=swap">
+<style>
+/* Single column: score on top, analysis below, like an annotated edition */
+:root{--bg:#f7f8fa;--paper:#fff;--fg:#1d2230;--muted:#5d6577;--line:#d8dce5;--accent:#2f5d8a;
+--display:"Cormorant Garamond",Georgia,serif;--body:"Source Sans 3",system-ui,sans-serif;--mono:"JetBrains Mono",ui-monospace,monospace}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#14171e;--paper:#1c2029;--fg:#e4e7ee;--muted:#9aa2b3;--line:#323847;--accent:#8db6e0;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#14171e;--paper:#1c2029;--fg:#e4e7ee;--muted:#9aa2b3;--line:#323847;--accent:#8db6e0;color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font:16px/1.55 var(--body)}
+main{max-width:1000px;margin:auto;padding-inline:16px;padding-block:32px 64px;display:grid;gap:32px}
+h1{font:600 2.4rem/1.1 var(--display);margin:0;text-wrap:balance}h2{font:600 1.5rem var(--display);margin:0 0 12px}
+.sub{color:var(--muted);margin:6px 0 0}
+.lbl{font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+#score{background:#fff;border:1px solid var(--line);border-radius:6px;padding:8px;overflow-x:auto}
+.keys{display:grid;gap:6px;max-width:520px}.k{display:grid;grid-template-columns:90px 1fr 48px;gap:10px;align-items:center;font-variant-numeric:tabular-nums}
+.bar{height:10px;background:var(--line);border-radius:5px}.bar i{display:block;height:100%;background:var(--accent);border-radius:5px}
+.k:first-child{font-weight:600}
+.measures{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.m{background:var(--paper);border:1px solid var(--line);border-radius:6px;padding:8px 10px;min-width:0}
+.m .rn{font:1.05rem var(--mono);display:flex;flex-wrap:wrap;gap:4px 10px}.rn span{cursor:help}
+/* Player stays pinned to the top while the score scrolls past */
+.player{display:flex;flex-wrap:wrap;align-items:center;gap:12px 20px;margin:0 0 -20px;position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);padding-block:10px;border-bottom:1px solid var(--line)}
+.play{font:600 1rem var(--body);background:var(--accent);color:var(--bg);border:0;border-radius:6px;padding:8px 18px;cursor:pointer;min-width:96px}
+.play:focus-visible,.player input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.player label{display:flex;align-items:center;gap:6px;color:var(--muted);font-variant-numeric:tabular-nums}
+.voices{display:flex;flex-wrap:wrap;gap:4px 12px}
+.rn span{padding:0 3px;border-radius:3px;transition:background .1s}.rn span.on{background:var(--accent);color:var(--bg)}
+.m.on{border-color:var(--accent)}
+@media (prefers-reduced-motion:reduce){.rn span{transition:none}}
+.pick{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;margin:0 0 14px}
+select{font:1rem var(--body);color:var(--fg);background:var(--paper);border:1px solid var(--line);border-radius:6px;padding:6px 10px;max-width:100%}
+select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.status{color:var(--muted);font-size:.9rem}
+.vl{margin:8px 0 0;padding-left:1.2em;color:var(--muted)}
+.note{color:var(--muted);max-width:65ch}
+</style>
+<main>
+<header>
+<div class="pick"><label class="lbl" for="pick">Chorale</label><select id="pick"></select><span class="status" id="status" role="status"></span></div>
+<div class="lbl">music21 corpus · <span id="work"></span></div><h1 id="t"></h1>
+<p class="sub">Detected key <b id="key"></b> · Krumhansl–Schmuckler · <span id="vl"></span></p><ul class="vl" id="vlist"></ul></header>
+<div class="player"><button class="play" id="play" type="button">▶ Play</button>
+<label for="inst">Instrument <select id="inst"><option value="piano">Grand piano</option><option value="organ">Organ</option><option value="clarinet">Clarinet</option><option value="flute">Flute</option><option value="oboe">Oboe</option><option value="recorder">Recorder</option></select></label>
+<label for="bpm">Tempo <input id="bpm" type="range" min="40" max="120" value="72"> <span id="bpmv">72</span> bpm</label>
+<div class="voices" id="voices"></div></div>
+<section><h2>Score</h2>
+<div id="score">Loading notation…</div></section>
+<section><h2>Key correlations</h2><div class="keys" id="keys"></div></section>
+<section><h2>Roman numerals by measure</h2><div class="measures" id="ms"></div>
+<p class="note">One chord per beat, shown here and under the bass staff. Within each beat the analysis keeps a slice that already forms a triad or seventh chord; if none does, it drops the fewest pitches needed to leave one. Dropped pitches are treated as passing or neighbor tones and appear in the tooltip. A chord with a missing fifth or third is labeled as the complete chord. A suspension is labeled as the chord it resolves into, with its figures, as in <code>V(4–3)</code>. Under a bass note held through a change of harmony, the labels are joined by a dash, as in <code>ii64–V</code>. A <code>?</code> marks a beat that fits no single chord, so its label is a guess.</p>
+<p class="note">Minor keys use natural-minor numerals with the raised sixth and seventh unmarked, so the subtonic chord is <code>VII</code> and the dominant is <code>V</code>. Chromatic chords that tonicize the next harmony are labeled as applied chords. A major triad or dominant seventh whose root falls a fifth to the next chord is <code>V/x</code>, as in <code>V6/vi</code> in BWV 253, m.&nbsp;6. A diminished chord whose root rises a half step is <code>vii°/x</code>. A chromatic chord that resolves some other way keeps its own label, so a closing Picardy third stays <code>I</code>. Parallel fifths and octaves are checked between sung voices only; treat them as places to look in the score, not verdicts. Fermatas play as written and are followed by an eighth-rest breath. Playback follows repeat signs and first and second endings, and tied notes sound as one.</p>
+<p class="note">Instrument samples: FluidR3 General MIDI soundfont; the recorder comes from the FatBoy set. The organ is its church organ preset, the closest sound available to an 8′ principal.</p></section>
+</main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/opensheetmusicdisplay@1.8.9/build/opensheetmusicdisplay.min.js"></script>
+<script>
+const INDEX=[{"bwv": "1.6", "title": "Wie schön leuchtet der Morgenstern", "version": null, "id": "bwv1.6", "file": "data/bwv1.6.json"}, {"bwv": "2.6", "title": "Ach Gott, vom Himmel sieh darein", "version": null, "id": "bwv2.6", "file": "data/bwv2.6.json"}, {"bwv": "3.6", "title": "Ach Gott, wie manches Herzeleid", "version": null, "id": "bwv3.6", "file": "data/bwv3.6.json"}, {"bwv": "4.8", "title": "Christ lag in Todesbanden", "version": null, "id": "bwv4.8", "file": "data/bwv4.8.json"}, {"bwv": "5.7", "title": "Wo soll ich fliehen hin?", "version": null, "id": "bwv5.7", "file": "data/bwv5.7.json"}, {"bwv": "6.6", "title": "Bleib bei uns, denn es will Abend werden", "version": null, "id": "bwv6.6", "file": "data/bwv6.6.json"}, {"bwv": "7.7", "title": "Christ unser Herr zum Jordan kam", "version": null, "id": "bwv7.7", "file": "data/bwv7.7.json"}, {"bwv": "8.6", "title": "Liebster Gott, wenn werd ich sterben?", "version": null, "id": "bwv8.6", "file": "data/bwv8.6.json"}, {"bwv": "9.7", "title": "Es ist das Heil uns kommen her", "version": null, "id": "bwv9.7", "file": "data/bwv9.7.json"}, {"bwv": "10.7", "title": "Meine Seel erhebt dein Herren", "version": null, "id": "bwv10.7", "file": "data/bwv10.7.json"}, {"bwv": "11.6", "title": "Lobet Gott in seinen Reichen", "version": null, "id": "bwv11.6", "file": "data/bwv11.6.json"}, {"bwv": "12.7", "title": "Weinen, Klagen, Sorgen, Zagen", "version": null, "id": "bwv12.7", "file": "data/bwv12.7.json"}, {"bwv": "13.6", "title": "Meine Seufzer, meine Tränen", "version": null, "id": "bwv13.6", "file": "data/bwv13.6.json"}, {"bwv": "14.5", "title": "Wär Gott nicht mit uns diese Zeit", "version": null, "id": "bwv14.5", "file": "data/bwv14.5.json"}, {"bwv": "16.6", "title": "Herr Gott, dich loben wir", "version": null, "id": "bwv16.6", "file": "data/bwv16.6.json"}, {"bwv": "17.7", "title": "Wer Dank opfert, der preiset mich", "version": null, "id": "bwv17.7", "file": "data/bwv17.7.json"}, {"bwv": "18.5", "title": "Gleichwie der Regen und Schnee vom Himmel fällt", "version": "Leipzig", "id": "bwv18.5-lz", "file": "data/bwv18.5-lz.json"}, {"bwv": "18.5", "title": "Gleichwie der Regen und Schnee vom Himmel fällt", "version": "Weimar", "id": "bwv18.5-w", "file": "data/bwv18.5-w.json"}, {"bwv": "19.7", "title": "Es erhub sich ein Streit", "version": null, "id": "bwv19.7", "file": "data/bwv19.7.json"}, {"bwv": "20.7", "title": "O Ewigkeit, du Donnerwort", "version": null, "id": "bwv20.7", "file": "data/bwv20.7.json"}, {"bwv": "20.11", "title": "O Ewigkeit, du Donnerwort", "version": null, "id": "bwv20.11", "file": "data/bwv20.11.json"}, {"bwv": "24.6", "title": "Ein ungefärbt Gemüte", "version": null, "id": "bwv24.6", "file": "data/bwv24.6.json"}, {"bwv": "25.6", "title": "Es ist nichts Gesundes an meinem Leibe", "version": null, "id": "bwv25.6", "file": "data/bwv25.6.json"}, {"bwv": "26.6", "title": "Ach wie flüchtig, ach wie nichtig", "version": null, "id": "bwv26.6", "file": "data/bwv26.6.json"}, {"bwv": "27.6", "title": "Wer weiss, wie nahe mir mein Ende?", "version": null, "id": "bwv27.6", "file": "data/bwv27.6.json"}, {"bwv": "28.6", "title": "Gottlob! nun geht das Jahr zu Ende", "version": null, "id": "bwv28.6", "file": "data/bwv28.6.json"}, {"bwv": "29.8", "title": "Wir danken dir Gott, wir danken dir", "version": null, "id": "bwv29.8", "file": "data/bwv29.8.json"}, {"bwv": "30.6", "title": "Freue dich, erlöste Schar", "version": null, "id": "bwv30.6", "file": "data/bwv30.6.json"}, {"bwv": "31.9", "title": "Der Himmel lacht! Die Erde jubilieret", "version": null, "id": "bwv31.9", "file": "data/bwv31.9.json"}, {"bwv": "32.6", "title": "Liebster Jesu, mein Verlangen", "version": null, "id": "bwv32.6", "file": "data/bwv32.6.json"}, {"bwv": "33.6", "title": "Allein zu dir, Herr Jesu Christ", "version": null, "id": "bwv33.6", "file": "data/bwv33.6.json"}, {"bwv": "36.4", "title": "Schwingt freudig euch empor", "version": null, "id": "bwv36.4-2", "file": "data/bwv36.4-2.json"}, {"bwv": "36.8", "title": "Schwingt freudig euch empor", "version": null, "id": "bwv36.8-2", "file": "data/bwv36.8-2.json"}, {"bwv": "37.6", "title": "Wer da gläubet und getauft wird", "version": null, "id": "bwv37.6", "file": "data/bwv37.6.json"}, {"bwv": "38.6", "title": "Aus tiefer Not schrei ich zu dir", "version": null, "id": "bwv38.6", "file": "data/bwv38.6.json"}, {"bwv": "39.7", "title": "Brich dem Hungrigen dein Brot", "version": null, "id": "bwv39.7", "file": "data/bwv39.7.json"}, {"bwv": "40.3", "title": "Dazu ist erschienen der Sohn Gottes", "version": null, "id": "bwv40.3", "file": "data/bwv40.3.json"}, {"bwv": "40.6", "title": "Dazu ist erschienen der Sohn Gottes", "version": null, "id": "bwv40.6", "file": "data/bwv40.6.json"}, {"bwv": "40.8", "title": "Dazu ist erschienen der Sohn Gottes", "version": null, "id": "bwv40.8", "file": "data/bwv40.8.json"}, {"bwv": "41.6", "title": "Jesu, nun sei gepreiset", "version": null, "id": "bwv41.6", "file": "data/bwv41.6.json"}, {"bwv": "42.7", "title": "Am Abend aber desselbigen Sabbatas", "version": null, "id": "bwv42.7", "file": "data/bwv42.7.json"}, {"bwv": "66.6", "title": "Erfreut euch, ihr Herzen", "version": null, "id": "bwv66.6", "file": "data/bwv66.6.json"}, {"bwv": "80.8", "title": "Ein’ feste Burg ist unser Gott", "version": null, "id": "bwv80.8", "file": "data/bwv80.8.json"}, {"bwv": "81.7", "title": "Jesus schläft, was soll ich hoffen?", "version": null, "id": "bwv81.7", "file": "data/bwv81.7.json"}, {"bwv": "87.7", "title": "Bisher habt ihr nichts gebeten in meinem Namen", "version": null, "id": "bwv87.7", "file": "data/bwv87.7.json"}, {"bwv": "227.1", "title": "Jesu, meine Freude", "version": null, "id": "bwv227.1", "file": "data/bwv227.1.json"}, {"bwv": "227.3", "title": "Jesu, meine Freude", "version": null, "id": "bwv227.3", "file": "data/bwv227.3.json"}, {"bwv": "227.7", "title": "Jesu, meine Freude", "version": null, "id": "bwv227.7", "file": "data/bwv227.7.json"}, {"bwv": "253", "title": "Ach bleib bei uns, Herr Jesu Christ", "version": null, "id": "bwv253", "file": "data/bwv253.json"}, {"bwv": "302", "title": "Ein feste Burg ist unser Gott", "version": null, "id": "bwv302", "file": "data/bwv302.json"}, {"bwv": "303", "title": "Ein feste Burg ist unser Gott", "version": null, "id": "bwv303", "file": "data/bwv303.json"}, {"bwv": "358", "title": "Jesu, meine Freude", "version": null, "id": "bwv358", "file": "data/bwv358.json"}, {"bwv": "392", "title": "Nun ruhen alle Wälder", "version": null, "id": "bwv392", "file": "data/bwv392.json"}];
+const cache=new Map();          // chorale file -> analysis, so revisiting a chorale is instant
+let A=null,osmd=null,playing=false,vOn=[],holds=[],spans=[];
+const esc=x=>String(x).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const label=e=>`BWV ${e.bwv} ${e.title}${e.version?` (${e.version})`:''}`;
+pick.innerHTML=INDEX.map((e,i)=>`<option value="${i}">${esc(label(e))}</option>`).join('');
+
+async function loadChorale(i){
+ const e=INDEX[i];stop();
+ if(!cache.has(e.file)){status.textContent='Loading…';
+  try{const r=await fetch(e.file);if(!r.ok)throw new Error(r.status);cache.set(e.file,await r.json())}
+  catch(err){status.textContent=`Could not load ${label(e)}. Check your connection and pick it again.`;return}}
+ status.textContent='';A=cache.get(e.file);try{history.replaceState(null,'','#'+e.id)}catch{}
+ render(e)}
+
+function render(e){
+ work.textContent=A.work;t.textContent=label(e);key.textContent=A.key;
+ vl.textContent=A.voiceLeading.length?A.voiceLeading.length+' possible parallel 5ths/8ves':'no parallel fifths or octaves';
+ vlist.innerHTML=A.voiceLeading.map(v=>`<li>m. ${v.measure}: ${esc(v.type)}, ${esc(v.voices)}</li>`).join('');
+ keys.innerHTML=A.alternatives.map(([k,c])=>`<div class="k"><span>${k}</span><span class="bar"><i style="width:${Math.max(0,c)*100}%"></i></span><span>${c.toFixed(3)}</span></div>`).join('');
+ const by={};A.chords.forEach(c=>(by[c.measure]??=[]).push(c));
+ ms.innerHTML=Object.entries(by).sort((a,b)=>a[0]-b[0]).map(([m,cs])=>`<div class="m"><div class="lbl">m. ${m}</div><div class="rn">${cs.map(c=>`<span data-o="${c.offset}" title="beat ${c.beat}: ${c.pitches.join(' ')}${c.nonChordTones.length?' · non-chord: '+c.nonChordTones.join(', '):''}">${c.roman}</span>`).join('')}</div></div>`).join('');
+ spans=[...document.querySelectorAll('.rn span')];
+ // Every fermata (in any voice) marks a phrase end
+ holds=[...new Set(A.voices.flatMap(v=>v.notes.filter(n=>n[3]).map(n=>n[1]+n[2])))];
+ vOn=A.voices.map(()=>true);
+ voices.innerHTML=A.voices.map((v,i)=>`<label for="v${i}"><input type="checkbox" id="v${i}" checked> ${esc(v.name)}</label>`).join('');
+ A.voices.forEach((v,i)=>document.getElementById('v'+i).onchange=ev=>vOn[i]=ev.target.checked);
+ if(!osmd)return;score.querySelector('.err')?.remove();
+ osmd.load(A.musicxml).then(()=>{osmd.zoom=window.innerWidth<600?.55:.7;osmd.render()}).catch(err=>score.insertAdjacentHTML('afterbegin',`<p class="err">Notation failed to render: ${esc(err.message)}</p>`))}
+
+// A fermata takes a breath: an implied eighth rest (half a beat) before the next phrase
+const BREATH=.5;
+const warp=q=>q+BREATH*holds.filter(h=>h<=q+1e-6).length;
+const warpEnd=q=>q+BREATH*holds.filter(h=>h<q-1e-6).length;   // note endings don't absorb the breath
+// Played time for each written position: one timeline segment per played measure [played, written, length]
+const toPlayed=w=>(A.timeline||[[0,0,1e9]]).filter(([p,s,l])=>w>=s-1e-6&&w<s+l-1e-6).map(([p,s])=>p+(w-s));
+bpm.oninput=()=>{bpmv.textContent=bpm.value;if(typeof Tone!=='undefined'&&Tone.Transport.state==='started')Tone.Transport.bpm.value=+bpm.value};
+
+// Sampled instruments: published as JSON maps of note -> base64 mp3, decoded locally
+const samplers={};let rev=null;
+async function getSampler(name){
+ if(samplers[name])return samplers[name];
+ const map=await (await fetch(`sounds/${name}.json`)).json();
+ const urls={};
+ await Promise.all(Object.entries(map).map(async([n,uri])=>{
+  const bin=Uint8Array.from(atob(uri.split(',')[1]),c=>c.charCodeAt(0));
+  urls[n]=await Tone.getContext().rawContext.decodeAudioData(bin.buffer)}));
+ rev??=new Tone.Reverb({decay:2.8,wet:.22}).toDestination();
+ const s=new Tone.Sampler({urls,release:name==='piano'?1:.35}).connect(rev);s.volume.value=-8;
+ return samplers[name]=s}
+let current=null;
+async function selectInstrument(){status.textContent='Loading instrument…';
+ try{const s=await getSampler(inst.value);current?.releaseAll();current=s;status.textContent=''}
+ catch(err){status.textContent='Could not load that instrument. Try again or pick another.'}}
+inst.onchange=()=>{if(typeof Tone!=='undefined'&&Tone.context.state==='running')selectInstrument()};
+
+function clear(){spans.forEach(s=>s.classList.remove('on'));document.querySelectorAll('.m.on').forEach(m=>m.classList.remove('on'))}
+// Move the OSMD cursor forward to the first position at or after quarter-note offset q
+function seek(q){if(!osmd||!osmd.cursor)return;const c=osmd.cursor;
+ if(c.Iterator.currentTimeStamp.RealValue*4>q+1e-6)c.reset();
+ while(!c.Iterator.EndReached&&c.Iterator.currentTimeStamp.RealValue*4<q-1e-6)c.next();
+ followLine();}
+// Scroll only when the cursor moves onto a new line of music, so the reader can browse freely in between
+let lineTop=null;
+function followLine(force){const el=osmd?.cursor?.cursorElement;if(!el)return;
+ const top=Math.round(el.offsetTop);if(!force&&top===lineTop)return;lineTop=top;
+ const r=el.getBoundingClientRect(),bar=document.querySelector('.player').getBoundingClientRect().bottom;
+ window.scrollBy({top:r.top-bar-16,behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'})}
+function stop(){if(osmd&&osmd.cursor){osmd.cursor.reset();osmd.cursor.hide()}
+ if(typeof Tone!=='undefined'){Tone.Transport.stop();Tone.Transport.cancel();current?.releaseAll()}
+ playing=false;play.textContent='▶ Play';clear()}
+play.onclick=async()=>{
+ if(typeof Tone==='undefined'){play.textContent='Audio unavailable';return}
+ if(playing)return stop();
+ if(!A)return;
+ await Tone.start();
+ if(!current||samplers[inst.value]!==current){play.disabled=true;await selectInstrument();play.disabled=false;if(!current)return}
+ Tone.Transport.bpm.value=+bpm.value;Tone.Transport.cancel();
+ A.voices.forEach((v,i)=>v.notes.forEach(([midi,on,dur])=>{
+  const start=warp(on),len=warpEnd(on+dur)-start;
+  Tone.Transport.schedule(t=>{if(vOn[i])current.triggerAttackRelease(Tone.Frequency(midi,'midi').toNote(),len*60/Tone.Transport.bpm.value*0.95,t)},`0:${start}`)}));
+ // Notes are in played order (repeats expanded); highlights and the cursor use written positions,
+ // so they jump back to the start of a repeated section along with the music
+ A.chords.forEach(c=>toPlayed(c.offset).forEach(pt=>Tone.Transport.schedule(t=>Tone.Draw.schedule(()=>{clear();const s=spans.find(x=>+x.dataset.o===c.offset);if(s){s.classList.add('on');s.closest('.m').classList.add('on')}},t),`0:${warp(pt)}`)));
+ const writtenAt=new Map(A.voices.flatMap(v=>v.notes.map(n=>[n[1],n[4]])));
+ writtenAt.forEach((w,on)=>Tone.Transport.schedule(t=>Tone.Draw.schedule(()=>seek(w),t),`0:${warp(on)}`));
+ if(osmd&&osmd.cursor){osmd.cursor.reset();osmd.cursor.show();lineTop=null;followLine(true)}
+ const end=Math.max(...A.voices.flatMap(v=>v.notes.map(n=>warp(n[1]+n[2]))));
+ Tone.Transport.schedule(t=>Tone.Draw.schedule(stop,t+1.5),`0:${end}`);
+ Tone.Transport.position=0;Tone.Transport.start('+0.1');playing=true;play.textContent='■ Stop'};
+
+try{osmd=new opensheetmusicdisplay.OpenSheetMusicDisplay('score',{autoResize:true,followCursor:false,cursorsOptions:[{type:0,color:'#2f5d8a',alpha:.45,follow:false}],drawTitle:false,drawComposer:false,drawCredits:false,drawPartNames:true});score.textContent=''}
+catch(e){score.textContent='Notation library failed to load.'}
+pick.onchange=()=>loadChorale(+pick.value);
+const fromHash=INDEX.findIndex(e=>'#'+e.id===location.hash);
+pick.value=String(fromHash>=0?fromHash:INDEX.findIndex(e=>e.bwv==='66.6'));
+loadChorale(+pick.value);
+</script>
+
+</html>
